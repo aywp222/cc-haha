@@ -322,10 +322,7 @@
 ```
 ┌──────────────┐
 │ + New session │ ← 导航项
-│ 🔍 Search     │
 │ ⏰ Scheduled  │
-│ 📦 Dispatch   │
-│ ⚙ Customize  │
 │              │
 │ All projects ▾│ ← 项目过滤
 │ ─────────────│
@@ -582,7 +579,68 @@
 
 ---
 
-### 5.10 Scheduled 页面
+### 5.10 Agent Teams 面板
+
+当对话中创建 Agent Teams 时，消息列表下方出现 Team 状态栏和成员标签。
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ [消息列表...]                                            │
+│                                                          │
+│ ▸ Team: ui-backend-dev (3 members)                      │
+│ ┌──────────────────────────────────────────────────────┐ │
+│ │ ● session-dev    ● config-dev     ○ features-dev     │ │
+│ │   running          completed        running          │ │
+│ └──────────────────────────────────────────────────────┘ │
+│                                                          │
+│ ─────── Viewing: session-dev transcript ──────────      │
+│                                                          │
+│  [该成员的独立消息流]                                      │
+│  > 正在读取 sessionStorage.ts...                          │
+│  Agent  探索会话存储                                      │
+│  Bash · 2 tool calls                                     │
+│                                                          │
+│  [← Back to Leader]                                      │
+└──────────────────────────────────────────────────────────┘
+```
+
+| 元素 | 规格 |
+|------|------|
+| Team 状态栏高度 | 32px |
+| Team 状态栏背景 | `#F5F3EF` |
+| Team 名称 | 13px, 字重 600 |
+| 成员数量 | 13px, 色 `#999999` |
+| 成员标签容器 | flex row, gap 8px, padding 8px 12px |
+| 成员标签 | 圆角 6px, padding 4px 10px, 字号 12px, 字重 500 |
+| 成员标签背景(默认) | `#F0EDE8` |
+| 成员标签背景(选中) | Agent 专用色（半透明 15%） |
+| 成员标签边框(选中) | 2px solid Agent 专用色 |
+| 状态指示器 | 左侧 6px 圆点 |
+| Running 指示器 | 色 `rgb(202,138,4)` (黄), 闪烁动画 |
+| Completed 指示器 | 色 `rgb(44,122,57)` (绿), 实心 |
+| Failed 指示器 | 色 `rgb(171,43,63)` (红), 实心 |
+| Idle 指示器 | 色 `#CCCCCC` (灰), 空心 |
+| 分隔线("Viewing...") | 1px solid `#E5E3DE`, 上下 8px margin |
+| "Viewing" 标签 | 12px, 色 `#999999`, 居中 |
+| Back 按钮 | 13px, 色 `rgb(87,105,247)`, 左对齐, cursor pointer |
+| Teammate transcript | 与主消息列表相同的渲染规则 |
+
+**Agent 颜色分配** (来自 `src/utils/theme.ts`):
+
+| 颜色名 | Light 色值 | 用于标签边框和背景色 |
+|--------|-----------|---------------------|
+| red | `rgb(220,38,38)` | 第 1 个 agent |
+| blue | `rgb(37,99,235)` | 第 2 个 agent |
+| green | `rgb(22,163,74)` | 第 3 个 agent |
+| yellow | `rgb(202,138,4)` | 第 4 个 agent |
+| purple | `rgb(147,51,234)` | 第 5 个 agent |
+| orange | `rgb(234,88,12)` | 第 6 个 agent |
+| pink | `rgb(219,39,119)` | 第 7 个 agent |
+| cyan | `rgb(8,145,178)` | 第 8 个 agent |
+
+---
+
+### 5.11 Scheduled 页面
 
 ```
 ┌──────────────────────────────────────────┐
@@ -610,7 +668,7 @@
 
 ---
 
-### 5.11 New Scheduled Task 模态框
+### 5.12 New Scheduled Task 模态框
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -678,7 +736,7 @@
 
 ---
 
-### 5.12 活跃会话标题栏
+### 5.13 活跃会话标题栏
 
 ```
   Analyze project structure and codebase ▾        ▷ Preview ▾
@@ -836,17 +894,27 @@
   → 输入框恢复为空/上次未发送的草稿
 ```
 
-### 8.6 搜索流程
+### 8.6 Agent Teams 流程
 
 ```
-用户点击侧边栏 "Search"
-  → 主内容区显示搜索页
-  → 用户输入关键词
-  → 100ms 防抖后发起搜索
-  → 显示匹配结果列表
-  → 用户点击结果项
-  → 显示代码上下文预览
-  → 用户可跳转到文件或插入到对话
+对话中 AI 调用 TeamCreate
+  → 消息列表下方出现 Team 状态栏
+  → 显示 Team 名称 + 成员标签列表
+  → 各成员标签显示 ● running（黄色闪烁）
+
+用户点击某个成员标签
+  → 消息列表切换到该成员的 transcript
+  → 显示 "Viewing: {name} transcript" 分隔线
+  → 实时渲染该 agent 的消息流（工具调用、文本）
+  → 底部显示 "← Back to Leader" 按钮
+
+成员完成任务
+  → 对应标签变为 ● completed（绿色实心）
+  → Leader 视图收到 task-notification 消息
+
+用户点击 "← Back to Leader"
+  → 返回 Leader 的主对话流
+  → Team 状态栏依然可见
 ```
 
 ---
@@ -875,10 +943,7 @@
 | 用途 | 图标 | 说明 |
 |------|------|------|
 | New session | `+` | 加号，创建新会话 |
-| Search | 🔍 | 放大镜 |
 | Scheduled | ⏰ | 时钟 |
-| Dispatch | 📦 | 发送箱 |
-| Customize | 🔒 | 锁/齿轮 |
 | Ask permissions | ⚙ | 齿轮 |
 | Auto accept | `</>` | 代码符号 |
 | Plan mode | 📋 | 剪贴板 |
@@ -892,6 +957,9 @@
 | Git 分支 | 🔀 | 分支图标 |
 | 前进 | → | 右箭头 |
 | 后退 | ← | 左箭头 |
-| 下载 | ⬇ | 下箭头 |
 | 选中 | ✓ | 勾选 |
 | 信息 | ℹ | 圆形 i |
+| Agent Running | ● | 6px 圆点，闪烁 |
+| Agent Completed | ● | 6px 实心绿点 |
+| Agent Failed | ● | 6px 实心红点 |
+| Back to Leader | ← | 左箭头 + 文本 |
