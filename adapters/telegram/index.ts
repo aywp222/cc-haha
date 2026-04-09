@@ -147,7 +147,7 @@ async function showProjectPicker(chatId: string): Promise<void> {
     )
     pendingProjectSelection.set(chatId, true)
     await bot.api.sendMessage(numericChatId,
-      `选择项目（回复编号）：\n\n${lines.join('\n\n')}`)
+      `选择项目（回复编号）：\n\n${lines.join('\n\n')}\n\n💡 下次可直接 /new <编号或名称> 快速新建会话`)
   } catch (err) {
     await bot.api.sendMessage(numericChatId,
       `❌ 无法获取项目列表: ${err instanceof Error ? err.message : String(err)}`)
@@ -266,14 +266,19 @@ bot.command('start', (ctx) => {
   ctx.reply(
     '👋 Claude Code Bot 已就绪。\n\n' +
     '命令:\n' +
-    '/projects — 选择/切换项目\n' +
-    '/new — 新建会话\n' +
+    '/new — 新建会话（使用默认项目）\n' +
+    '/new <名称或编号> — 新建会话并指定项目\n' +
+    '/projects — 查看项目列表\n' +
     '/stop — 停止生成'
   )
 })
 
-bot.command('new', async (ctx) => {
-  const chatId = String(ctx.chat.id)
+/** Reset session state and start a new session for chatId.
+ *  If `query` is provided, match a project by index or name;
+ *  otherwise use defaultProjectDir or show the picker. */
+async function startNewSession(chatId: string, query?: string): Promise<void> {
+  const numericChatId = Number(chatId)
+
   bridge.resetSession(chatId)
   sessionStore.delete(chatId)
   placeholders.delete(chatId)
@@ -282,15 +287,43 @@ bot.command('new', async (ctx) => {
   buffers.delete(chatId)
   pendingProjectSelection.delete(chatId)
 
-  const workDir = config.defaultProjectDir
-  if (workDir) {
-    const ok = await createSessionForChat(chatId, workDir)
-    if (ok) {
-      await bot.api.sendMessage(Number(chatId), '✅ 已新建会话，可以开始对话了。')
+  if (query) {
+    try {
+      const { project, ambiguous } = await httpClient.matchProject(query)
+      if (project) {
+        const ok = await createSessionForChat(chatId, project.realPath)
+        if (ok) {
+          await bot.api.sendMessage(numericChatId,
+            `✅ 已新建会话：${project.projectName}${project.branch ? ` (${project.branch})` : ''}`)
+        }
+        return
+      }
+      if (ambiguous) {
+        const list = ambiguous.map((p, i) => `${i + 1}. ${p.projectName} — ${p.realPath}`).join('\n')
+        await bot.api.sendMessage(numericChatId, `匹配到多个项目，请更精确：\n\n${list}`)
+        return
+      }
+      await bot.api.sendMessage(numericChatId, `未找到匹配 "${query}" 的项目。发送 /projects 查看完整列表。`)
+    } catch (err) {
+      await bot.api.sendMessage(numericChatId,
+        `❌ ${err instanceof Error ? err.message : String(err)}`)
     }
   } else {
-    await showProjectPicker(chatId)
+    const workDir = config.defaultProjectDir
+    if (workDir) {
+      const ok = await createSessionForChat(chatId, workDir)
+      if (ok) {
+        await bot.api.sendMessage(numericChatId, '✅ 已新建会话，可以开始对话了。')
+      }
+    } else {
+      await showProjectPicker(chatId)
+    }
   }
+}
+
+bot.command('new', async (ctx) => {
+  const chatId = String(ctx.chat.id)
+  await startNewSession(chatId, ctx.match?.trim() || undefined)
 })
 
 bot.command('projects', async (ctx) => {
@@ -330,23 +363,9 @@ bot.on('message:text', (ctx) => {
   }
 
   enqueue(chatId, async () => {
-    // Check if user is responding to project selection
+    // Project selection pending — treat input as /new <query>
     if (pendingProjectSelection.has(chatId)) {
-      const num = parseInt(text, 10)
-      if (num >= 1) {
-        try {
-          const projects = await httpClient.listRecentProjects()
-          const selected = projects[num - 1]
-          if (selected) {
-            pendingProjectSelection.delete(chatId)
-            await createSessionForChat(chatId, selected.realPath)
-            await bot.api.sendMessage(Number(chatId),
-              `✅ 已选择 ${selected.projectName}。现在可以开始对话了。`)
-            return
-          }
-        } catch { /* fall through */ }
-      }
-      await bot.api.sendMessage(Number(chatId), '请输入有效的编号。')
+      await startNewSession(chatId, text.trim())
       return
     }
 

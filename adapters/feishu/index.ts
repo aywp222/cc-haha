@@ -252,9 +252,51 @@ async function showProjectPicker(chatId: string): Promise<void> {
       `${i + 1}. **${p.projectName}**${p.branch ? ` (${p.branch})` : ''}\n   ${p.realPath}`
     )
     pendingProjectSelection.set(chatId, true)
-    await sendText(chatId, `选择项目（回复编号）：\n\n${lines.join('\n\n')}`)
+    await sendText(chatId, `选择项目（回复编号）：\n\n${lines.join('\n\n')}\n\n💡 下次可直接 /new <编号或名称> 快速新建会话`)
   } catch (err) {
     await sendText(chatId, `❌ 无法获取项目列表: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+async function startNewSession(chatId: string, query?: string): Promise<void> {
+  bridge.resetSession(chatId)
+  sessionStore.delete(chatId)
+  chatStates.delete(chatId)
+  accumulatedText.delete(chatId)
+  buffers.get(chatId)?.reset()
+  buffers.delete(chatId)
+  pendingProjectSelection.delete(chatId)
+
+  if (query) {
+    try {
+      const { project, ambiguous } = await httpClient.matchProject(query)
+      if (project) {
+        const ok = await createSessionForChat(chatId, project.realPath)
+        if (ok) {
+          await sendText(chatId,
+            `✅ 已新建会话：**${project.projectName}**${project.branch ? ` (${project.branch})` : ''}`)
+        }
+        return
+      }
+      if (ambiguous) {
+        const list = ambiguous.map((p, i) => `${i + 1}. **${p.projectName}** — ${p.realPath}`).join('\n')
+        await sendText(chatId, `匹配到多个项目，请更精确：\n\n${list}`)
+        return
+      }
+      await sendText(chatId, `未找到匹配 "${query}" 的项目。发送 /projects 查看完整列表。`)
+    } catch (err) {
+      await sendText(chatId, `❌ ${err instanceof Error ? err.message : String(err)}`)
+    }
+  } else {
+    const workDir = config.defaultProjectDir
+    if (workDir) {
+      const ok = await createSessionForChat(chatId, workDir)
+      if (ok) {
+        await sendText(chatId, '✅ 已新建会话，可以开始对话了。')
+      }
+    } else {
+      await showProjectPicker(chatId)
+    }
   }
 }
 
@@ -436,24 +478,9 @@ async function handleMessage(data: any): Promise<void> {
   if (!text) return
 
   // Handle commands
-  if (text === '/new' || text === '新会话') {
-    bridge.resetSession(chatId)
-    sessionStore.delete(chatId)
-    chatStates.delete(chatId)
-    accumulatedText.delete(chatId)
-    buffers.get(chatId)?.reset()
-    buffers.delete(chatId)
-    pendingProjectSelection.delete(chatId)
-
-    const workDir = config.defaultProjectDir
-    if (workDir) {
-      const ok = await createSessionForChat(chatId, workDir)
-      if (ok) {
-        await sendText(chatId, '✅ 已新建会话，可以开始对话了。')
-      }
-    } else {
-      await showProjectPicker(chatId)
-    }
+  if (text === '/new' || text === '新会话' || text.startsWith('/new ')) {
+    const arg = text.startsWith('/new ') ? text.slice(5).trim() : ''
+    await startNewSession(chatId, arg || undefined)
     return
   }
   if (text === '/stop' || text === '停止') {
@@ -468,20 +495,7 @@ async function handleMessage(data: any): Promise<void> {
 
   // Check if user is responding to project selection
   if (pendingProjectSelection.has(chatId)) {
-    const num = parseInt(text, 10)
-    if (num >= 1) {
-      try {
-        const projects = await httpClient.listRecentProjects()
-        const selected = projects[num - 1]
-        if (selected) {
-          pendingProjectSelection.delete(chatId)
-          await createSessionForChat(chatId, selected.realPath)
-          await sendText(chatId, `✅ 已选择 **${selected.projectName}**。现在可以开始对话了。`)
-          return
-        }
-      } catch { /* fall through */ }
-    }
-    await sendText(chatId, '请输入有效的编号。')
+    await startNewSession(chatId, text.trim())
     return
   }
 

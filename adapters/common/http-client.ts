@@ -41,4 +41,34 @@ export class AdapterHttpClient {
     const data = (await res.json()) as { projects: RecentProject[] }
     return data.projects
   }
+
+  /**
+   * Match a project by index (1-based) or fuzzy name from recent projects.
+   * Returns { project, ambiguous[] } — ambiguous is set when multiple projects match.
+   */
+  async matchProject(query: string): Promise<{ project?: RecentProject; ambiguous?: RecentProject[] }> {
+    const projects = await this.listRecentProjects()
+
+    // Try as 1-based index
+    const num = parseInt(query, 10)
+    if (!isNaN(num) && num >= 1 && num <= projects.length && String(num) === query.trim()) {
+      return { project: projects[num - 1] }
+    }
+
+    const q = query.toLowerCase()
+
+    // Exact project name match
+    const exact = projects.find(p => p.projectName.toLowerCase() === q)
+    if (exact) return { project: exact }
+
+    // Fuzzy: name or path contains query
+    const matches = projects.filter(p =>
+      p.projectName.toLowerCase().includes(q) ||
+      p.realPath.toLowerCase().includes(q)
+    )
+    if (matches.length === 1) return { project: matches[0] }
+    if (matches.length > 1) return { ambiguous: matches }
+
+    return {}
+  }
 }
