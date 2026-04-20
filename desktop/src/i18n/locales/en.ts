@@ -625,6 +625,7 @@ export const en = {
   'update.now': 'Update now',
   'update.later': 'Later',
   'update.progress': 'Downloading update... {progress}%',
+  'update.progressBytes': 'Downloading update... {downloaded} downloaded',
   'update.releaseNotes': 'Release Notes',
   'update.restarting': 'Restarting to finish update...',
   'update.upToDate': 'You are up to date on v{version}.',

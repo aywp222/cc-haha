@@ -22,6 +22,7 @@ import { ComputerUseSettings } from './ComputerUseSettings'
 import { useUIStore, type SettingsTab } from '../stores/uiStore'
 import { ClaudeOfficialLogin } from '../components/settings/ClaudeOfficialLogin'
 import { useUpdateStore } from '../stores/updateStore'
+import { formatBytes } from '../lib/formatBytes'
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('providers')
@@ -1279,6 +1280,8 @@ function AboutSettings() {
   const availableVersion = useUpdateStore((s) => s.availableVersion)
   const releaseNotes = useUpdateStore((s) => s.releaseNotes)
   const progressPercent = useUpdateStore((s) => s.progressPercent)
+  const downloadedBytes = useUpdateStore((s) => s.downloadedBytes)
+  const totalBytes = useUpdateStore((s) => s.totalBytes)
   const error = useUpdateStore((s) => s.error)
   const checkedAt = useUpdateStore((s) => s.checkedAt)
   const checkForUpdates = useUpdateStore((s) => s.checkForUpdates)
@@ -1307,11 +1310,15 @@ function AboutSettings() {
         })
       : null
 
+  const hasKnownProgress = typeof totalBytes === 'number' && totalBytes > 0
+  const downloadedText = formatBytes(downloadedBytes)
   const updateDescription =
     updateStatus === 'checking'
       ? t('update.checking')
       : updateStatus === 'downloading'
-        ? t('update.progress', { progress: String(progressPercent) })
+        ? hasKnownProgress
+          ? t('update.progress', { progress: String(progressPercent) })
+          : t('update.progressBytes', { downloaded: downloadedText })
         : updateStatus === 'restarting'
           ? t('update.restarting')
           : updateStatus === 'available' && availableVersion
@@ -1400,22 +1407,33 @@ function AboutSettings() {
           {(updateStatus === 'downloading' || updateStatus === 'restarting') && (
             <div className="mt-3">
               <div className="h-1.5 bg-[var(--color-surface-container-low)] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[var(--color-text-accent)] transition-all duration-300"
-                  style={{ width: `${Math.min(progressPercent, 100)}%` }}
-                />
+                {hasKnownProgress || updateStatus === 'restarting' ? (
+                  <div
+                    className="h-full bg-[var(--color-text-accent)] transition-all duration-300"
+                    style={{ width: `${Math.min(progressPercent, 100)}%` }}
+                  />
+                ) : (
+                  <div className="h-full w-1/3 rounded-full bg-[var(--color-text-accent)]/75 animate-pulse" />
+                )}
               </div>
+              {!hasKnownProgress && updateStatus === 'downloading' && downloadedBytes > 0 && (
+                <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
+                  {downloadedText}
+                </p>
+              )}
             </div>
           )}
 
           {releaseNotes && availableVersion && (
-            <div className="mt-3 rounded-lg bg-[var(--color-surface-container-low)] px-3 py-2">
+            <div className="mt-3 rounded-lg bg-[var(--color-surface-container-low)] px-3 py-3">
               <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 {t('update.releaseNotes')}
               </div>
-              <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)] whitespace-pre-wrap">
-                {releaseNotes}
-              </p>
+              <MarkdownRenderer
+                content={releaseNotes}
+                variant="document"
+                className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)] [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:text-[13px] [&_p]:leading-6"
+              />
             </div>
           )}
 

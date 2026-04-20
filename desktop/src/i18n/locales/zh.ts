@@ -627,6 +627,7 @@ export const zh: Record<TranslationKey, string> = {
   'update.now': '立即更新',
   'update.later': '稍后',
   'update.progress': '正在下载更新... {progress}%',
+  'update.progressBytes': '正在下载更新... 已下载 {downloaded}',
   'update.releaseNotes': '更新说明',
   'update.restarting': '正在重启以完成更新...',
   'update.upToDate': '当前已是最新版本 v{version}。',

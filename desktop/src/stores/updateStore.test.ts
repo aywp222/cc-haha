@@ -15,6 +15,7 @@ describe('updateStore', () => {
   beforeEach(() => {
     check.mockReset()
     relaunch.mockReset()
+    window.localStorage.clear()
     Object.defineProperty(window, '__TAURI_INTERNALS__', {
       configurable: true,
       value: {},
@@ -38,6 +39,53 @@ describe('updateStore', () => {
     expect(useUpdateStore.getState().status).toBe('available')
     expect(useUpdateStore.getState().availableVersion).toBe('0.2.0')
     expect(useUpdateStore.getState().releaseNotes).toBe('Bug fixes and performance improvements')
+    expect(useUpdateStore.getState().shouldPrompt).toBe(true)
+  })
+
+  it('does not re-prompt for the same version after dismissing once', async () => {
+    check.mockResolvedValue({
+      version: '0.2.0',
+      body: 'Bug fixes and performance improvements',
+      close: vi.fn().mockResolvedValue(undefined),
+    })
+
+    vi.resetModules()
+    const { useUpdateStore } = await import('./updateStore')
+
+    await useUpdateStore.getState().checkForUpdates()
+    useUpdateStore.getState().dismissPrompt()
+
+    expect(useUpdateStore.getState().shouldPrompt).toBe(false)
+    expect(window.localStorage.getItem('cc-haha-dismissed-update-version')).toBe('0.2.0')
+
+    await useUpdateStore.getState().checkForUpdates({ silent: true })
+
+    expect(useUpdateStore.getState().status).toBe('available')
+    expect(useUpdateStore.getState().availableVersion).toBe('0.2.0')
+    expect(useUpdateStore.getState().shouldPrompt).toBe(false)
+  })
+
+  it('prompts again when a newer version is available after dismissing an older one', async () => {
+    check
+      .mockResolvedValueOnce({
+        version: '0.2.0',
+        body: 'Bug fixes and performance improvements',
+        close: vi.fn().mockResolvedValue(undefined),
+      })
+      .mockResolvedValueOnce({
+        version: '0.3.0',
+        body: 'New release',
+        close: vi.fn().mockResolvedValue(undefined),
+      })
+
+    vi.resetModules()
+    const { useUpdateStore } = await import('./updateStore')
+
+    await useUpdateStore.getState().checkForUpdates()
+    useUpdateStore.getState().dismissPrompt()
+    await useUpdateStore.getState().checkForUpdates({ silent: true })
+
+    expect(useUpdateStore.getState().availableVersion).toBe('0.3.0')
     expect(useUpdateStore.getState().shouldPrompt).toBe(true)
   })
 
